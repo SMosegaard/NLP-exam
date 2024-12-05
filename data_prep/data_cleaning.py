@@ -16,9 +16,9 @@ def remove_author_prefix(df):
 def add_sentiment_column(df):
     '''
     Adds a 'Sentiment' column to the df based on the 'Rating' column.
-    Ratings 1-3 are considered 'neg' (negative) and ratings 4-6 are considered 'pos' (positive)
+    Ratings 1-3 are considered 'neg' (negative) and ratings 5-6 are considered 'pos' (positive)
     '''
-    df['Sentiment'] = np.where(df['Rating'] >= 4, 'pos', 'neg')
+    df['Sentiment'] = np.where(df['Rating'] >= 5, 'pos', np.where(df['Rating'] <= 3, 'neg', 'neu'))
     return df
 
 
@@ -84,7 +84,7 @@ def main():
     
     df = load_and_process_data(filepath)
 
-    outpath = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/reviews_TEST.csv"
+    outpath = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/reviews.csv"
     #outpath = "data/reviews.csv"
     df.to_csv(outpath, index = False)
     print("Processed data saved to:", outpath)

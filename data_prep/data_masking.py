@@ -118,7 +118,7 @@ def main():
 
     df = df[:10]
 
-    output_path = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/"
+    output_path = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/reviews_masked.csv"
     #outpath = "data/reviews_masked.csv"
     masked_df = make_all_df(df, output_path)
 
