@@ -15,7 +15,7 @@ female_specific_terms = ['blondine', 'groupie', 'gravid', 'luder', 'dulle', 'jom
                         'skabslebbe', 'skabslesbisk',
                         ]
 
-male_specific_terms = ['playboy', 'ungkarl', 'Spider-Man', 'macho', 'machoprægede', 'metroseksuel',
+male_specific_terms = ['playboy', 'ungkarl', 'spider-man', 'macho', 'machoprægede', 'metroseksuel',
                         'bejler', 'blowjob',
                         ]
 
