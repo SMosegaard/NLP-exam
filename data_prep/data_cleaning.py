@@ -1,9 +1,5 @@
 import pandas as pd
 import numpy as np
-import nltk
-import spacy
-import gender_guesser.detector as gd
-
 
 def remove_author_prefix(df):
     '''
@@ -84,7 +80,7 @@ def main():
     
     df = load_and_process_data(filepath)
 
-    outpath = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/reviews.csv"
+    outpath = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/cleaned_reviews.csv"
     #outpath = "data/reviews.csv"
     df.to_csv(outpath, index = False)
     print("Processed data saved to:", outpath)
