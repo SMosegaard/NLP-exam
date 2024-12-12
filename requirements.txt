@@ -10,3 +10,4 @@ seaborn == 0.13.2
 transformers == 4.47.0
 torch
 tqdm == 4.67.1
+deep-translator
