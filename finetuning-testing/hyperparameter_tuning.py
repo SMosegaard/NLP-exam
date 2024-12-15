@@ -1,31 +1,66 @@
+# Import packages
 
 import os
 import sys
 import torch
 import pandas as pd
 import numpy as np
-import pickle
 import random
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler, random_split
 from torch.optim import lr_scheduler
 import torch.nn as nn
-from transformers import AdamW, get_linear_schedule_with_warmup, get_scheduler
-from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoModelForTokenClassification, AutoModelForSequenceClassification
+from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from collections import Counter
 from tqdm import tqdm
-from deep_translator import GoogleTranslator
-import seaborn as sns
-import matplotlib.pyplot as plt
 import optuna
 
 
-# tuning test
+# Define functions
+
+def flat_accuracy(preds, labels):
+    preds_flat = np.argmax(preds, axis = 1).flatten()
+    labels_flat = labels.flatten()
+    return np.sum(preds_flat == labels_flat) / len(labels_flat)
 
 
-def objective(trial):
+def load_data(file_path):
+    df = pd.read_csv(file_path)
+    df['Sentiment'] = df['Sentiment'].map({'pos': 1, 'neg': 0})
+    text = df['text'].tolist()
+    labels = df['Sentiment'].tolist()
+    return text, labels
+
+
+def tokenize_data(train_text, labels, tokenizer):
+    input_ids = []
+    attention_masks = []
+
+    for text in train_text:
+        encoded_dict = tokenizer.encode_plus(
+            text,
+            add_special_tokens = True,
+            max_length = 512,
+            padding = "max_length",
+            truncation = True,
+            return_attention_mask = True,
+            return_tensors = "pt",
+        )
+
+        input_ids.append(encoded_dict["input_ids"])
+        attention_masks.append(encoded_dict["attention_mask"])
+
+    # Convert to tensors
+    input_ids = torch.cat(input_ids, dim = 0)
+    attention_masks = torch.cat(attention_masks, dim = 0)
+    labels = torch.tensor(labels)
+
+    return input_ids, attention_masks, labels
+
+
+def objective(trial, data):
 
     # Hyperparameters to tune
     dropout_rate = trial.suggest_uniform('dropout', 0.1, 0.5)
@@ -35,7 +70,7 @@ def objective(trial):
     warmup = trial.suggest_categorical('warmup', [0.0, 0.1])
 
     # load data
-    train_file = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/original_train.csv"
+    train_file = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/{data}.csv"
     train_text, train_labels = load_data(train_file)
 
     # Tokenizer
@@ -51,7 +86,7 @@ def objective(trial):
     # Tokenize and prepare data
     input_ids, attention_masks, labels = tokenize_data(train_text, train_labels, tokenizer)
     dataset = TensorDataset(input_ids, attention_masks, labels)
-    train_dataset, val_dataset = train_test_split(dataset, test_size = 0.3, stratify = labels)
+    train_dataset, val_dataset = train_test_split(dataset, test_size = 0.3, stratify = labels, random_state = 123)
 
     train_dataloader = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
     validation_dataloader = DataLoader(val_dataset, batch_size = batch_size)
@@ -116,50 +151,34 @@ def objective(trial):
         if trial.should_prune():
             raise optuna.exceptions.TrialPruned()
 
-    save_trial_results(trial.number, trial.params, best_val_loss)
+    save_trial_results(trial.number, trial.params, best_val_loss, warmup, data)
     return best_val_loss
 
 
+def save_trial_results(trial_number, params, best_val_loss, warmup, data):
+    params['warmup'] = params.get('warmup', None)  # Ensure warmup exists in case of issues
 
-# Function to compute the accuracy of predictions vs labels
-def flat_accuracy(preds, labels):
-    preds_flat = np.argmax(preds, axis = 1).flatten()
-    labels_flat = labels.flatten()
-    return np.sum(preds_flat == labels_flat) / len(labels_flat)
+    result_dict = {
+        'trial': trial_number,
+        'params': params,
+        'best_val_loss': best_val_loss,
+        'warmup': warmup
+    }
+    
+    df = pd.DataFrame([result_dict])    
+    results_path = f'/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuning-testing/optuna_results_{data}.csv'    
+    file_exists = os.path.exists(results_path)    
+    df.to_csv(results_path, mode = 'a', header = not file_exists, index = False)
 
 
-def load_data(file_path):
-    df = pd.read_csv(file_path)
-    df['Sentiment'] = df['Sentiment'].map({'pos': 1, 'neg': 0})
-    text = df['text'].tolist()
-    labels = df['Sentiment'].tolist()
-    return text, labels
-
-
-def tokenize_data(train_text, labels, tokenizer):
-    input_ids = []
-    attention_masks = []
-    for text in train_text:
-        encoded_dict = tokenizer.encode_plus(
-            text,
-            add_special_tokens = True,
-            max_length = 512,
-            padding = "max_length",
-            truncation = True,
-            return_attention_mask = True,
-            return_tensors = "pt",
-        )
-        input_ids.append(encoded_dict["input_ids"])
-        attention_masks.append(encoded_dict["attention_mask"])
-    # Convert to tensors
-    input_ids = torch.cat(input_ids, dim = 0)
-    attention_masks = torch.cat(attention_masks, dim = 0)
-    labels = torch.tensor(labels)
-    return input_ids, attention_masks, labels
-
-if __name__ == "__main__":
+def main(data):
 
     study = optuna.create_study(direction = "minimize")
-    study.optimize(objective, n_trials = 10)
+    study.optimize(lambda trial: objective(trial, data), n_trials = 10)
 
     print("Best Hyperparameters:", study.best_params)
+
+    return study.best_params
+
+if __name__ == "__main__":
+    main()
