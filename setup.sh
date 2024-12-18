@@ -9,9 +9,6 @@ source ./virt_env/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Load models ??
-python -m spacy download da_core_news_sm
-
 # Inform user
 echo "Successfully installed requirements.txt"
 
