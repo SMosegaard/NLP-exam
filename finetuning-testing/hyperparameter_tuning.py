@@ -26,41 +26,7 @@ def flat_accuracy(preds, labels):
     return np.sum(preds_flat == labels_flat) / len(labels_flat)
 
 
-def load_data(file_path):
-    df = pd.read_csv(file_path)
-    df['Sentiment'] = df['Sentiment'].map({'pos': 1, 'neg': 0})
-    text = df['text'].tolist()
-    labels = df['Sentiment'].tolist()
-    return text, labels
-
-
-def tokenize_data(train_text, labels, tokenizer):
-    input_ids = []
-    attention_masks = []
-
-    for text in train_text:
-        encoded_dict = tokenizer.encode_plus(
-            text,
-            add_special_tokens = True,
-            max_length = 512,
-            padding = "max_length",
-            truncation = True,
-            return_attention_mask = True,
-            return_tensors = "pt",
-        )
-
-        input_ids.append(encoded_dict["input_ids"])
-        attention_masks.append(encoded_dict["attention_mask"])
-
-    # Convert to tensors
-    input_ids = torch.cat(input_ids, dim = 0)
-    attention_masks = torch.cat(attention_masks, dim = 0)
-    labels = torch.tensor(labels)
-
-    return input_ids, attention_masks, labels
-
-
-def objective(trial, data):
+def objective(trial, data, train_dataset, val_dataset):
 
     # Hyperparameters to tune
     dropout_rate = trial.suggest_uniform('dropout', 0.1, 0.5)
@@ -69,10 +35,10 @@ def objective(trial, data):
     lr = trial.suggest_loguniform('lr', 5e-5, 1e-3)
     warmup = trial.suggest_categorical('warmup', [0.0, 0.1])
 
-    # load data
-    train_file = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/{data}.csv"
-    train_text, train_labels = load_data(train_file)
-
+    # Prepare data
+    train_dataloader = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
+    validation_dataloader = DataLoader(val_dataset, batch_size = batch_size)
+    
     # Tokenizer
     tokenizer = AutoTokenizer.from_pretrained("vesteinn/DanskBERT")
 
@@ -82,14 +48,6 @@ def objective(trial, data):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-
-    # Tokenize and prepare data
-    input_ids, attention_masks, labels = tokenize_data(train_text, train_labels, tokenizer)
-    dataset = TensorDataset(input_ids, attention_masks, labels)
-    train_dataset, val_dataset = train_test_split(dataset, test_size = 0.3, stratify = labels, random_state = 123)
-
-    train_dataloader = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
-    validation_dataloader = DataLoader(val_dataset, batch_size = batch_size)
 
     # Optimizer and Scheduler
     optimizer = AdamW(model.parameters(), lr = lr, eps = 1e-8, weight_decay = 0.01)
@@ -166,15 +124,19 @@ def save_trial_results(trial_number, params, best_val_loss, warmup, data):
     }
     
     df = pd.DataFrame([result_dict])    
-    results_path = f'/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuning-testing/optuna_results_{data}.csv'    
+
+    results_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuned_models/BERT_finetuned_{data}/optuna_results_{data}.csv"
+    if not os.path.exists(results_path):
+        os.makedirs(results_path)
+
     file_exists = os.path.exists(results_path)    
     df.to_csv(results_path, mode = 'a', header = not file_exists, index = False)
 
 
-def main(data):
+def main(data, train_dataset, val_dataset):
 
     study = optuna.create_study(direction = "minimize")
-    study.optimize(lambda trial: objective(trial, data), n_trials = 10)
+    study.optimize(lambda trial: objective(trial, data, train_dataset, val_dataset), n_trials = 10)
 
     print("Best Hyperparameters:", study.best_params)
 
