@@ -40,7 +40,7 @@ def parser():
       
     args = parser.parse_args()
     args.data = args.data.lower()
-    args.HyperparameterTuning = args.HyperparameterTuning.lower()
+    args.hyperparameter_tuning = args.hyperparameter_tuning.lower()
     return args
 
 
@@ -414,22 +414,26 @@ def main():
                 "warmup": 0.1}
 
     # Perform hyperparameter tuning or simply use default parameters
-    if args.HyperparameterTuning == 'yes':
-        tuned_parameters = hyperparameter_tuning_main(args.data)
+    if args.hyperparameter_tuning == 'yes':
+        tuned_parameters = hyperparameter_tuning_main(args.data, train_dataset, val_dataset)
         print(f"Best Hyperparameters: {tuned_parameters}")
         parameters.update(tuned_parameters)
 
     # DataLoader
-    batch_size = batch_size
+    batch_size = parameters["batch_size"]
     train_dataloader = DataLoader(train_dataset, batch_size = batch_size, shuffle = True)
     validation_dataloader = DataLoader(val_dataset, batch_size = batch_size)
 
     # Load model
+    dropout = parameters["dropout"]
     model = load_model(dropout)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     # Define optimizer and learning rate scheduler
+    lr = parameters["lr"]
+    epochs = parameters["epochs"]
+    warmup = parameters["warmup"]
     optimizer = define_optimizer(model, lr)
     scheduler = define_scheduler(train_dataloader, epochs, warmup, optimizer)
     
@@ -483,7 +487,7 @@ def main():
     print("Training complete!")
 
     # Save fine-tuned model
-    output_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuned_models/BERT_finetuned_{data}"
+    output_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuned_models/BERT_finetuned_{args.data}"
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
@@ -495,6 +499,12 @@ def main():
 
     # Plot loss, accuracy, anf F1
     plot_training_metrics(df_stats, output_path)
+    
+    # Save used parameters
+    parameters_file = os.path.join(output_path, "parameters_used.txt")
+    with open(parameters_file, "w") as f:
+        for key, value in parameters.items():
+            f.write(f"{key}: {value}\n")
     
     print(f"Model, metrics table, and metrics plot are saved to {output_path}")
 
