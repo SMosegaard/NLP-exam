@@ -1,2 +1,0 @@
-trial,params,best_val_loss
-5,"{'lr': 0.0006581424035306149, 'batch_size': 16, 'dropout': 0.3689728570516613, 'epochs': 14}",0.6925964388582442
