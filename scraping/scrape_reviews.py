@@ -48,7 +48,7 @@ def scrape_reviews(urls):
 
 def main():
 
-    scraped_urls_path = '/work/SofieNørboMosegaard#5741/NLP/NLP-exam/scraping/ekkofilm_urls_webscraper.csv'
+    scraped_urls_path = 'scraping/ekkofilm_urls_webscraper.csv'
     scraped_urls = pd.read_csv(scraped_urls_path, delimiter = ',', header = None)
     
     scraped_urls.columns = ['Title', 'URL']
@@ -56,7 +56,7 @@ def main():
 
     df = scrape_reviews(urls)
 
-    output_path = '/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/scraped_ekkofilm_reviews.csv'
+    output_path = 'data/scraped_ekkofilm_reviews.csv'
     df.to_csv(output_path, index = False)
 
     print(f"Data scraped and saved successfully")
