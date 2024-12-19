@@ -1,8 +1,8 @@
 from itertools import chain
 import pandas as pd
 
-female_names = pd.read_csv('/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/female_names.csv')
-male_names = pd.read_csv('/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/male_names.csv')
+female_names = pd.read_csv('data/female_names.csv')
+male_names = pd.read_csv('data/male_names.csv')
 
 # Mask names
 # Define name sets
@@ -147,7 +147,6 @@ terms_f2m = {**term_dict, **female_names_dict, **female_specific_terms_dict}
 
 # Male to female: remove male-specific terms in female version
 terms_m2f = {**dict((k, v) for v, k in term_dict.items()), **male_names_dict, **male_specific_terms_dict}
-
 
 # Define the "all terms" incl female/male_specific_dict
 all_terms = set(list(terms_m2f.keys()) + list(terms_f2m.keys()))

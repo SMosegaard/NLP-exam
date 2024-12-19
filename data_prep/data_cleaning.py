@@ -75,13 +75,10 @@ def load_and_process_data(filepath):
 
 def main():
 
-    filepath = '/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/scraped_ekkofilm_reviews.csv'
-    #filepath = "data/scraped_ekkofilm_reviews.csv'"
-    
+    filepath = "data/scraped_ekkofilm_reviews.csv'"
     df = load_and_process_data(filepath)
-
-    outpath = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data/cleaned_reviews.csv"
-    #outpath = "data/reviews.csv"
+    
+    outpath = "data/reviews.csv"
     df.to_csv(outpath, index = False)
     print("Processed data saved to:", outpath)
 

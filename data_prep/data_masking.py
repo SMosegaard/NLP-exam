@@ -20,7 +20,6 @@ def count_terms(review, terms = all_terms):
     '''
     term_counted = dict.fromkeys(terms, 0)
     for term in terms:
-        #term = re.escape(term) # to avoid regex issues
         pattern = rf'{term}\w*'
         term_counted[term] = len(re.findall(pattern, review))
     return term_counted
@@ -31,7 +30,6 @@ def mask_by_term_dict(review, term_dict):
     Replace gender-specific terms in the review based on the term_dict
     '''
     for term, replacement in term_dict.items():
-        #term = re.escape(term)
         pattern = rf'({term})(\w*)'
         review = re.sub(pattern, replacement + '\\2', review)
     return review
@@ -56,7 +54,6 @@ def make_neutral(review, terms = all_terms):
     Mask all female- and male-specific names and terms in the text to make it neutral.
     '''
     for term in terms:
-        #term = re.escape(term)
         pattern = rf'{term}\w*'
         review = re.sub(pattern, '', review)
     return review
@@ -108,14 +105,12 @@ def split_and_save(df, output_path):
 
 def main():
 
-    filepath = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/cleaned_reviews.csv"
-    #filepath = "data/reviews.csv'"
+    filepath = "data/reviews.csv'"
 
     df = pd.read_csv(filepath)
     df = df[df.Sentiment != 'neu'] # only interested reviews with pos and neg sentiment
 
-    output_path = "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/"
-    #outpath = "data/reviews_masked.csv"
+    outpath = "data/reviews_masked.csv"
     masked_df = make_all_df(df, output_path)
 
     split_and_save(masked_df, output_path)
