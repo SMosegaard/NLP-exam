@@ -125,7 +125,7 @@ def save_trial_results(trial_number, params, best_val_loss, warmup, data):
     }
     df = pd.DataFrame([result_dict])    
 
-    results_path = f'/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuning-testing/optuna_results_{data}.csv'    
+    results_path = f'/work/SofieNørboMosegaard#5741/NLP/NLP-exam/model_training/optuna_results_{data}.csv'    
     file_exists = os.path.exists(results_path)    
     df.to_csv(results_path, mode = 'a', header = not file_exists, index = False)
 
