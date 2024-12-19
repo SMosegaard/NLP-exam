@@ -2,7 +2,7 @@
 source ./virt_env/bin/activate 
 
 # Run the code
-python finetuning-testing/BERT_finetuning.py "$@"
+python model_training/BERT_finetuning.py "$@"
 
 # Close the virtual envoriment
 deactivate 
