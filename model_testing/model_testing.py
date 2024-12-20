@@ -8,11 +8,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModelForSequenceClassification
-from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
+from scipy.stats import wilcoxon
 
-# Argument parser
+
 def parser():
     """
     The user can specify which finetuned model to test.
@@ -28,7 +28,7 @@ def parser():
     args.model = args.model.lower()
     return args
 
-# Defined functions
+
 def load_data(file_path):
     """
     Loads data and converts Sentiment classes to numeric labels (1 for positive, 0 for negative).
@@ -81,7 +81,7 @@ def load_model(model):
     return model
 
 
-def test_model(model, dataloader):
+def test_model(model, dataloader, device):
 
     model.eval()
 
@@ -129,10 +129,45 @@ def save_results(metrics_female, metrics_male, predictions_female, predictions_m
 
 
 
-def calculate_bias(female_preds, male_preds):
-    bias = np.mean(np.array(female_preds) - np.array(male_preds))
-    return bias
+def calculate_bias(male_preds, female_preds):
+    '''
+    The function will calculate the bias of each sample. Additionally, the total
+    bias will be calculated, which is simply the mean of all biases. This measure
+    also indicates will also measure the directional bias (e.g., preference for
+    female or male). Finally, it will take the mean of absolute biases, which
+    measures the magnitude of bias, regardless of direction.
+    '''
+    bias = np.mean(np.array(male_preds) - np.array(female_preds))
+    total_bias = np.mean(biases)
+    absolute_bias = np.mean(np.abs(biases))
+    return biases, total_bias, absolute_bias
 
+
+
+def test_significance(biases):
+    '''
+    Determine significance of the biases by employing the Wilcoxon Signed-Rank Test
+    '''
+    _, p_value = wilcoxon(biases, zero_method = "pratt")
+    return p_value
+
+
+def create_bias_table(model, total_biases, absolute_biases, p_values):
+    data = {"Model": model,
+            "Total Bias": total_biases,
+            "Absolute Bias": absolute_biases,
+            "p-value": p_values}
+    return pd.DataFrame(data)
+
+
+def plot_bias(biases, models, labels):
+    x = range(len(models))
+    plt.bar(x, biases, tick_label = models, color = ['blue' if b >= 0 else 'red' for b in biases])
+    plt.xlabel('Models')
+    plt.ylabel('Bias')
+    plt.title('Bias per Model')
+    plt.axhline(0, color = 'black', linewidth = 0.5)
+    plt.show()
 
 
 # Main script
@@ -141,68 +176,77 @@ def main():
     
     args = parser()
 
-    # Load data
-    F_train_text, F_train_labels = load_data("/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_female_test.csv")
-    M_train_text, M_train_labels = load_data("/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_male_test.csv")
+    # Paths for datasets
+    dataset_paths = {"female": "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_female_test.csv",
+                    "male": "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_male_test.csv"}
 
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    # Initialize dicts for predictions and metrics
+    predictions = {}
+    metrics_data = {}
 
-    # Tokenize data
-    F_input_ids, F_attention_masks = tokenize_data(F_train_text, tokenizer)
-    M_input_ids, M_attention_masks = tokenize_data(M_train_text, tokenizer)
+    # Loop through each test set
+    for gender, file_path in dataset_paths.items():
+        print(f"Processing {gender} dataset")
+
+        # Load data
+        text, labels = load_data(file_path)
+
+        # Load tokenizer
+        tokenizer = load_tokenizer(args.model)
+
+        # Tokenize data
+        input_ids, attention_masks, label_tensors = tokenize_data(text, labels, tokenizer)
+
+        # Create dataset
+        dataset = TensorDataset(input_ids, attention_masks, label_tensors)
+
+        # Create dataloader
+        dataloader = DataLoader(dataset, batch_size = 16, shuffle = True)
+
+        # Load fine-tuned model
+        model = load_model(args.model)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model.to(device)
+
+        # Test model on the dataset
+        metrics, preds = test_model(model, dataloader, device)
+        predictions[gender] = preds
+
+        # Save metrics and predictions for each dataset
+        metrics_data[gender] = {'Model': f"Finetuned {args.data} model (all-{gender} dataset)",
+                                'Metrics': metrics,
+                                'Total_Bias': None,  # Placeholder
+                                'Abs_Bias': None} 
+        predictions[gender] = {'Model': f"Finetuned {args.data} model (all-{gender} dataset)",
+                                'Predictions': preds,
+                                'True_Labels': labels}
+        
+        print(f"Finished testing on all{gender} data")
+    
+    # Calculate bias
+    biases, total_bias, absolute_bias = calculate_bias(predictions['male']['Predictions'], predictions['female']['Predictions'])
+    metrics_data["female"]["Total_Bias"] = total_bias
+    metrics_data["male"]["Total_Bias"] = total_bias
+    metrics_data["female"]["Abs_Bias"] = absolute_bias
+    metrics_data["male"]["Abs_Bias"] = absolute_bias
+
+    p_value = test_significance(biases)
+    data = create_bias_table(args.model, total_biases, absolute_biases, p_values)
+    plot_bias(biases, models, labels)
 
 
-    # Create dataset
-    F_dataset = TensorDataset(F_input_ids, F_attention_masks, F_labels)
-    M_dataset = TensorDataset(M_input_ids, M_attention_masks, M_labels)
-
-    # DataLoader
-    batch_size = 16
-    F_dataloader = DataLoader(F_dataset, batch_size = batch_size, shuffle = True)
-    M_dataloader = DataLoader(M_dataset, batch_size = batch_size, shuffle = True)
-
-    # Load fine-tuned omdel
-    model = load_model(args.model)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-
-    # Test!
-    F_metrics, F_predictions = test_model(pretrained_model, F_dataloader)
-    M_metrics, M_predictions = test_model(pretrained_model, M_dataloader)
-    print("Testing complete!")
-
-    # Define dicts and save results
-    metrics_female = {'Model': "Pretrained Model (Female Dataset)",
-                    'Metrics': F_metrics,
-                    'Bias': pretrained_bias}
-    metrics_male = {'Model': "Pretrained Model (Male Dataset)",
-                    'Metrics': M_metrics,
-                    'Bias': pretrained_bias}
-    predictions_female = {'Model': "Pretrained Model (Female Dataset)",
-                        'Predictions': F_predictions,
-                        'True_Labels': F_train_labels}
-    predictions_male = {'Model': "Pretrained Model (Male Dataset)",
-                        'Predictions': M_predictions,
-                        'True_Labels': M_train_labels}
-
+    # Save results
     output_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/results/"
-    save_results(metrics_female,
-                metrics_male,
-                predictions_female,
-                predictions_male, 
+    save_results(metrics_data["female"],
+                metrics_data["male"],
+                predictions["female"],
+                predictions["male"], 
                 f"{output_path}/model_results.pkl", 
                 f"{output_path}/predictions.pkl")
-    
+
     print("Results saved!")
 
-    # Calculate bias
-    bias = calculate_bias(F_predictions, M_predictions)
-    print(f"Pretrained model bias (Male - Female): {bias}")
-
-    with open(f"{output_path}/bias_{args.model}.txt", "w") as f:
-        f.write(f"{args.model} model bias (Male - Female): {bias}")
-    print("Bias measurement saved!")
 
 if __name__ == "__main__":
     main()
+
