@@ -8,9 +8,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModelForSequenceClassification
-import seaborn as sns
-import matplotlib.pyplot as plt
 from scipy.stats import wilcoxon
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
 def parser():
@@ -23,7 +22,7 @@ def parser():
                         "-m",
                         required = True,
                         choices = ["original", "neutral", "mix"],
-                        help = "Specify dataset for finetuning (original, neutral, or mixed)")  
+                        help = "Specify dataset for finetuning (original, neutral, or mix)")  
     args = parser.parse_args()
     args.model = args.model.lower()
     return args
@@ -119,6 +118,34 @@ def test_model(model, dataloader, device):
     return metrics, predictions
 
 
+
+def save_results_to_csv(metrics_data, predictions, output_path):
+    metrics_list = []
+    for gender, models in metrics_data.items():
+        for model_name, model_data in models.items():
+            metrics_list.append({'Gender': gender,
+                                'Model': model_data['Model'],
+                                'Accuracy': model_data['Metrics']['accuracy'],
+                                'Precision': model_data['Metrics']['precision'],
+                                'Recall': model_data['Metrics']['recall'],
+                                'F1 Score': model_data['Metrics']['f1_score']})
+    metrics_df = pd.DataFrame(metrics_list)
+
+    predictions_list = []
+    for gender, models in predictions.items():
+        for model_name, model_data in models.items():
+            predictions_list.append({'Gender': gender,
+                                    'Model': model_data['Model'],
+                                    'Predictions': model_data['Predictions'],
+                                    'True Labels': model_data['True_Labels']})    
+    predictions_df = pd.DataFrame(predictions_list)
+
+    metrics_df.to_csv(f"{output_path}/model_metrics.csv", mode = 'a', index = False)
+    predictions_df.to_csv(f"{output_path}/model_predictions.csv", mode = 'a', index = False)
+
+    print(f"Results saved as CSV at {output_path}")
+
+
 def save_results(metrics_female, metrics_male, predictions_female, predictions_male, metrics_path, predictions_path):
     with open(metrics_path, 'ab') as f:
         pickle.dump(metrics_female, f)
@@ -127,47 +154,6 @@ def save_results(metrics_female, metrics_male, predictions_female, predictions_m
         pickle.dump(predictions_female, f)
         pickle.dump(predictions_male, f)
 
-
-
-def calculate_bias(male_preds, female_preds):
-    '''
-    The function will calculate the bias of each sample. Additionally, the total
-    bias will be calculated, which is simply the mean of all biases. This measure
-    also indicates will also measure the directional bias (e.g., preference for
-    female or male). Finally, it will take the mean of absolute biases, which
-    measures the magnitude of bias, regardless of direction.
-    '''
-    bias = np.mean(np.array(male_preds) - np.array(female_preds))
-    total_bias = np.mean(biases)
-    absolute_bias = np.mean(np.abs(biases))
-    return biases, total_bias, absolute_bias
-
-
-
-def test_significance(biases):
-    '''
-    Determine significance of the biases by employing the Wilcoxon Signed-Rank Test
-    '''
-    _, p_value = wilcoxon(biases, zero_method = "pratt")
-    return p_value
-
-
-def create_bias_table(model, total_biases, absolute_biases, p_values):
-    data = {"Model": model,
-            "Total Bias": total_biases,
-            "Absolute Bias": absolute_biases,
-            "p-value": p_values}
-    return pd.DataFrame(data)
-
-
-def plot_bias(biases, models, labels):
-    x = range(len(models))
-    plt.bar(x, biases, tick_label = models, color = ['blue' if b >= 0 else 'red' for b in biases])
-    plt.xlabel('Models')
-    plt.ylabel('Bias')
-    plt.title('Bias per Model')
-    plt.axhline(0, color = 'black', linewidth = 0.5)
-    plt.show()
 
 
 # Main script
@@ -180,9 +166,9 @@ def main():
     dataset_paths = {"female": "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_female_test.csv",
                     "male": "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_male_test.csv"}
 
-    # Initialize dicts for predictions and metrics
-    predictions = {}
-    metrics_data = {}
+    # Initialize dicts for predictions and metric
+    metrics_data = {"female": {}, "male": {}}
+    predictions = {"female": {}, "male": {}}
 
     # Loop through each test set
     for gender, file_path in dataset_paths.items():
@@ -210,39 +196,29 @@ def main():
 
         # Test model on the dataset
         metrics, preds = test_model(model, dataloader, device)
-        predictions[gender] = preds
+        
+        #predictions[gender] = preds
+
+        # Initialize gender-specific dictionaries in predictions if not already done
+        if gender not in predictions:
+            predictions[gender] = {}
 
         # Save metrics and predictions for each dataset
-        metrics_data[gender] = {'Model': f"Finetuned {args.data} model (all-{gender} dataset)",
-                                'Metrics': metrics,
-                                'Total_Bias': None,  # Placeholder
-                                'Abs_Bias': None} 
-        predictions[gender] = {'Model': f"Finetuned {args.data} model (all-{gender} dataset)",
-                                'Predictions': preds,
-                                'True_Labels': labels}
+        metrics_data[gender][args.model] = {'Model': f"Finetuned {args.model} model (all-{gender} dataset)",
+                                            'Model': args.model,
+                                            'Gender': gender,
+                                            'Metrics': metrics} 
+        predictions[gender][args.model] = {'Model': f"Finetuned {args.model} model (all-{gender} dataset)",
+                                            'Model': args.model,
+                                            'Gender': gender,
+                                            'Predictions': preds,
+                                            'True_Labels': labels}
         
-        print(f"Finished testing on all{gender} data")
-    
-    # Calculate bias
-    biases, total_bias, absolute_bias = calculate_bias(predictions['male']['Predictions'], predictions['female']['Predictions'])
-    metrics_data["female"]["Total_Bias"] = total_bias
-    metrics_data["male"]["Total_Bias"] = total_bias
-    metrics_data["female"]["Abs_Bias"] = absolute_bias
-    metrics_data["male"]["Abs_Bias"] = absolute_bias
-
-    p_value = test_significance(biases)
-    data = create_bias_table(args.model, total_biases, absolute_biases, p_values)
-    plot_bias(biases, models, labels)
-
+        print(f"Finished testing on all-{gender} data")
 
     # Save results
     output_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/results/"
-    save_results(metrics_data["female"],
-                metrics_data["male"],
-                predictions["female"],
-                predictions["male"], 
-                f"{output_path}/model_results.pkl", 
-                f"{output_path}/predictions.pkl")
+    save_results_to_csv(metrics_data, predictions, output_path)
 
     print("Results saved!")
 
