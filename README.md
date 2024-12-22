@@ -1,4 +1,4 @@
-# 📚 NLP-exam: Assessing Gender Bias in Danish BERT model
+# 📚 Assessing Gender Bias in Danish BERT model
 
 This repository contains the code for my exam project in the course 'Natrual Language Processing' as a part of my Master in Cognitive Science.
 
