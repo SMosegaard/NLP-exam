@@ -1,4 +1,3 @@
-# Install requirements.txt for the project
 # Create a virtual envoriment called 'virt_env'
 python -m venv virt_env
 
