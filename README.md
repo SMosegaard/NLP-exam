@@ -1,6 +1,6 @@
-# 📚 NLP-exam: Assessing Representational Gender Bias in Danish BERT model
+# 📚 NLP-exam: Assessing Gender Bias in Danish BERT model
 
-This repository contains the code for my exam project in 'Natrual Language Processing'.
+This repository contains the code for my exam project in the course 'Natrual Language Processing' as a part of my Master in Cognitive Science.
 
 ## 🔧 Setup and installation guide
 
@@ -55,7 +55,7 @@ To fine-tune the model on the different data conditions, use the following comma
 ```python
 $ python model_training/BERT_finetuning.py -d {original/neutral/mix} -ht {yes/no}
 ```
-You can choose from three available datasets: ```original```, ```neutral```, or ```mix```. If you want to perform hyperparameter tuning, please write *'-ht yes'* and contrary, *'-ht no'* if not.
+You can choose from three available datasets: ```original```, ```neutral```, or ```mix```. If you want to perform hyperparameter tuning, please write '-ht yes' and contrary, '-ht no' if not.
 
 The script will automatically convert the input to lowercase, so whether you type the options with capital letters or not, it will not affect the execution.
 
