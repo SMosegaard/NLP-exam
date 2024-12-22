@@ -1,6 +1,3 @@
-# NLP-exam
-...
-
 # 📚 NLP-exam: Assessing Representational Gender Bias in Danish BERT model
 
 This repository contains the code for my exam project in 'Natrual Language Processing'.
