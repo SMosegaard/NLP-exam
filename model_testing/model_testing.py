@@ -1,4 +1,3 @@
-# Import packages
 import os
 import argparse
 import pandas as pd
@@ -14,17 +13,31 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 def parser():
     """
-    The user can specify which finetuned model to test.
+    The user can test either the pretrained or fine-tuned model. If the user wants to test the
+    fine-tuned model, the specific fine-tuned model should be specified.
     The function will then parse command-line arguments and make them lower case.
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model_type",
+                        "-mt",
+                        required = True,
+                        choices = ["pretrained", "finetuned"],
+                        help = "Specify the model type to test (pretrained or finetuned)")
     parser.add_argument("--model",
                         "-m",
-                        required = True,
+                        required = False,
                         choices = ["original", "neutral", "mix"],
-                        help = "Specify dataset for finetuning (original, neutral, or mix)")  
+                        help = "Specify the fine-tuned model to test (original, neutral, or mix)")  
     args = parser.parse_args()
-    args.model = args.model.lower()
+    args.model_type = args.model_type.lower()
+
+    #  If model_type is 'finetuned', ensure --model is provided
+    if args.model_type == "finetuned" and not args.model:
+        parser.error("--model must be specified when --model_type is 'finetuned'.")
+
+    if args.model_type == "finetuned":
+        args.model = args.model.lower()
+
     return args
 
 
@@ -39,10 +52,19 @@ def load_data(file_path):
     return text, labels
 
 
-def load_tokenizer(model):
-    finetuned_model_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuned_models-OLD/BERT_finetuned_{model}_train"
-    tokenizer = AutoTokenizer.from_pretrained(finetuned_model_path)
-    return tokenizer
+def load_tokenizer(model_type, model = None):
+    '''
+    Load either the pretrained or fine-tuned tokenizer
+    '''
+    if model_type == "pretrained":
+        tokenizer = AutoTokenizer.from_pretrained("vesteinn/DanskBERT")
+        print("Loaded the pretrained tokenizer")
+        return tokenizer
+    elif model_type == "finetuned":
+        finetuned_model_path = f"/finetuned_models/BERT_finetuned_{model}_train"
+        tokenizer = AutoTokenizer.from_pretrained(finetuned_model_path)
+        print(f"Loaded the fine-tuned tokenizer")
+        return tokenizer
 
 
 def tokenize_data(train_text, labels, tokenizer):
@@ -63,7 +85,6 @@ def tokenize_data(train_text, labels, tokenizer):
         input_ids.append(encoded_dict["input_ids"])
         attention_masks.append(encoded_dict["attention_mask"])
 
-    # Convert to tensors
     input_ids = torch.cat(input_ids, dim = 0)
     attention_masks = torch.cat(attention_masks, dim = 0)
     labels = torch.tensor(labels)
@@ -71,13 +92,20 @@ def tokenize_data(train_text, labels, tokenizer):
     return input_ids, attention_masks, labels
 
 
-def load_model(model):
+def load_model(model_type, model = None):
     '''
-    Load the finetuned model
+    Load either the pretrained model or the specified fine-tuned model
     '''
-    finetuned_model_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuned_models-OLD/BERT_finetuned_{model}_train"
-    model = AutoModelForSequenceClassification.from_pretrained(finetuned_model_path)
-    return model
+    if model_type == "pretrained":
+        model = AutoModelForSequenceClassification.from_pretrained("vesteinn/DanskBERT", num_labels = 2)
+        print("Loaded the pretrained model")
+        return model
+    
+    elif model_type == "finetuned":
+        finetuned_model_path = f"finetuned_models/BERT_finetuned_{model}_train"
+        model = AutoModelForSequenceClassification.from_pretrained(finetuned_model_path)
+        print(f"Loaded the fine-tuned model")
+        return model
 
 
 def test_model(model, dataloader, device):
@@ -118,13 +146,13 @@ def test_model(model, dataloader, device):
     return metrics, predictions
 
 
-
 def save_results_to_csv(metrics_data, predictions, output_path):
     metrics_list = []
     for gender, models in metrics_data.items():
         for model_name, model_data in models.items():
-            metrics_list.append({'Gender': gender,
-                                'Model': model_data['Model'],
+            metrics_list.append({'Model_type': model_data['Model'],
+                                'Gender': gender,
+                                'Model': model_name,
                                 'Accuracy': model_data['Metrics']['accuracy'],
                                 'Precision': model_data['Metrics']['precision'],
                                 'Recall': model_data['Metrics']['recall'],
@@ -134,8 +162,9 @@ def save_results_to_csv(metrics_data, predictions, output_path):
     predictions_list = []
     for gender, models in predictions.items():
         for model_name, model_data in models.items():
-            predictions_list.append({'Gender': gender,
-                                    'Model': model_data['Model'],
+            predictions_list.append({'Model_type': model_data['Model'],
+                                    'Gender': gender,
+                                    'Model': model_name,
                                     'Predictions': model_data['Predictions'],
                                     'True Labels': model_data['True_Labels']})    
     predictions_df = pd.DataFrame(predictions_list)
@@ -146,16 +175,6 @@ def save_results_to_csv(metrics_data, predictions, output_path):
     print(f"Results saved as CSV at {output_path}")
 
 
-def save_results(metrics_female, metrics_male, predictions_female, predictions_male, metrics_path, predictions_path):
-    with open(metrics_path, 'ab') as f:
-        pickle.dump(metrics_female, f)
-        pickle.dump(metrics_male, f)
-    with open(predictions_path, 'ab') as f:
-        pickle.dump(predictions_female, f)
-        pickle.dump(predictions_male, f)
-
-
-
 # Main script
 
 def main():
@@ -163,8 +182,8 @@ def main():
     args = parser()
 
     # Paths for datasets
-    dataset_paths = {"female": "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_female_test.csv",
-                    "male": "/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/all_male_test.csv"}
+    dataset_paths = {"female": "data/all_female_test.csv",
+                    "male": "data/all_male_test.csv"}
 
     # Initialize dicts for predictions and metric
     metrics_data = {"female": {}, "male": {}}
@@ -178,7 +197,7 @@ def main():
         text, labels = load_data(file_path)
 
         # Load tokenizer
-        tokenizer = load_tokenizer(args.model)
+        tokenizer = load_tokenizer(args.model_type, args.model)
 
         # Tokenize data
         input_ids, attention_masks, label_tensors = tokenize_data(text, labels, tokenizer)
@@ -190,34 +209,35 @@ def main():
         dataloader = DataLoader(dataset, batch_size = 16, shuffle = True)
 
         # Load fine-tuned model
-        model = load_model(args.model)
+        model = load_model(args.model_type, args.model)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model.to(device)
 
         # Test model on the dataset
         metrics, preds = test_model(model, dataloader, device)
         
-        #predictions[gender] = preds
-
         # Initialize gender-specific dictionaries in predictions if not already done
         if gender not in predictions:
             predictions[gender] = {}
 
         # Save metrics and predictions for each dataset
-        metrics_data[gender][args.model] = {'Model': f"Finetuned {args.model} model (all-{gender} dataset)",
-                                            'Model': args.model,
-                                            'Gender': gender,
-                                            'Metrics': metrics} 
-        predictions[gender][args.model] = {'Model': f"Finetuned {args.model} model (all-{gender} dataset)",
-                                            'Model': args.model,
-                                            'Gender': gender,
-                                            'Predictions': preds,
-                                            'True_Labels': labels}
-        
+        metrics_data[gender][args.model_type if args.model_type == "pretrained" else args.model] = {
+            'Model_type': f"{'Pretrained' if args.model_type == 'pretrained' else 'Finetuned ' + args.model} model (all-{gender} dataset)",
+            'Model': f"{'Pretrained' if args.model_type == 'pretrained' else args.model}",
+            'Gender': gender,
+            'Metrics': metrics}
+        predictions[gender][args.model_type if args.model_type == "pretrained" else args.model] = {
+            'Model_type': f"{'Pretrained' if args.model_type == "pretrained" else 'Finetuned ' + args.model} model (all-{gender} dataset)",
+            'Model': f"{'Pretrained' if args.model_type == 'pretrained' else args.model}",
+            'Gender': gender,
+            'Predictions': preds,
+            'True_Labels': labels
+        }
+
         print(f"Finished testing on all-{gender} data")
 
     # Save results
-    output_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/results/"
+    output_path = f"results"
     save_results_to_csv(metrics_data, predictions, output_path)
 
     print("Results saved!")
