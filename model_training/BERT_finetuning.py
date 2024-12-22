@@ -30,7 +30,7 @@ def parser():
     parser.add_argument("--data",
                         "-d",
                         required = True,
-                        choices = ["original_train", "neutral_train", "mix_train"],
+                        choices = ["original", "neutral", "mix"],
                         help = "Specify dataset for finetuning (original, neutral, or mixed gender)")  
     parser.add_argument("--hyperparameter_tuning",
                         "-ht",
@@ -130,11 +130,17 @@ def augment_data(train_text, train_labels):
 
 
 def load_tokenizer():
+    '''
+    Load the tokenizer
+    '''
     tokenizer = AutoTokenizer.from_pretrained("vesteinn/DanskBERT")
     return tokenizer
 
 
 def tokenize_data(train_text, labels, tokenizer):
+    '''
+    Tokenize the text input and convert the data to tensors
+    '''
     input_ids = []
     attention_masks = []
 
@@ -152,7 +158,6 @@ def tokenize_data(train_text, labels, tokenizer):
         input_ids.append(encoded_dict["input_ids"])
         attention_masks.append(encoded_dict["attention_mask"])
 
-    # Convert to tensors
     input_ids = torch.cat(input_ids, dim = 0)
     attention_masks = torch.cat(attention_masks, dim = 0)
     labels = torch.tensor(labels)
@@ -170,11 +175,17 @@ def load_model(dropout):
 
 
 def define_optimizer(model, lr):
+    '''
+    Define the AdamW optimizer with default epsilon and weight decay
+    '''
     optimizer = AdamW(model.parameters(), lr = lr, eps = 1e-8, weight_decay = 0.01)
     return optimizer
 
 
 def define_scheduler(train_dataloader, epochs, warmup, optimizer):
+    '''
+    Define the linear learing rate scheduler  
+    '''
     total_steps = len(train_dataloader) * epochs
     num_warmup_steps = int(warmup * total_steps)
     scheduler = get_linear_schedule_with_warmup(optimizer,
@@ -205,7 +216,9 @@ def compute_metrics(preds, labels):
 
 
 def train_epoch(model, train_dataloader, optimizer, scheduler, device):
-
+    '''
+    Deifne the training process!
+    '''
     model.train()
 
     total_train_loss = 0
@@ -257,6 +270,9 @@ def train_epoch(model, train_dataloader, optimizer, scheduler, device):
 
 
 def evaluate_epoch(model, validation_dataloader, device):
+    '''
+    Deifne the validation process!
+    '''
     model.eval()
 
     total_eval_accuracy = 0
@@ -299,6 +315,9 @@ def evaluate_epoch(model, validation_dataloader, device):
 
 
 def save_training_stats(training_stats, output_path):
+    '''
+    Function that saves the metrics from the training as a pandas dataframe to a specified path
+    '''
     df_stats = pd.DataFrame(training_stats).set_index('epoch')
     stats_file = os.path.join(output_path, "training_stats.csv")
     df_stats.to_csv(stats_file)
@@ -383,7 +402,7 @@ def main():
     args = parser()
 
     # Load data
-    file_path = f'/work/SofieNørboMosegaard#5741/NLP/NLP-exam/data_2/{args.data}.csv'
+    file_path = f'data/{args.data}_train.csv'
     text, labels = load_data(file_path)
     train_text, val_text, train_labels, val_labels = train_val_split(text, labels)
 
@@ -488,7 +507,7 @@ def main():
     print("Training complete!")
 
     # Save fine-tuned model
-    output_path = f"/work/SofieNørboMosegaard#5741/NLP/NLP-exam/finetuned_models/BERT_finetuned_{args.data}"
+    output_path = f"/finetuned_models/BERT_finetuned_{args.data}_train"
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
