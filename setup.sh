@@ -11,6 +11,3 @@ pip install -r requirements.txt
 
 # Inform user
 echo "Successfully installed requirements.txt"
-
-# Close the virtual envoriment
-deactivate
